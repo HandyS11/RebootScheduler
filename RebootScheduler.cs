@@ -1,19 +1,23 @@
-﻿using JetBrains.Annotations;
-using Newtonsoft.Json;
-using Oxide.Core;
-using Oxide.Core.Libraries;
-using Oxide.Core.Plugins;
-using Oxide.Ext.Discord.Entities.Messages.Embeds;
-using Oxide.Ext.Discord.Entities.Permissions;
-using Oxide.Ext.Discord.Entities.Webhooks;
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Reflection;            // There is no other way I swear (check Fields region)
 using System.Text;
+
+using Newtonsoft.Json;
+
+using Oxide.Core;
+using Oxide.Core.Libraries;
+using Oxide.Core.Libraries.Covalence;
+using Oxide.Core.Plugins;
+using Oxide.Ext.Discord.Entities.Messages.Embeds;
+using Oxide.Ext.Discord.Entities.Permissions;
+using Oxide.Ext.Discord.Entities.Webhooks;
+
 using UnityEngine;
+
 using Global = ConVar.Global;
 
 namespace Oxide.Plugins
@@ -115,8 +119,8 @@ namespace Oxide.Plugins
                     EnableOnOxideUpdate = true,
                     EnableOnServerUpdate = true,
                 },
-                RestartMessageCooldown = new[]
-                {
+                RestartMessageCooldown =
+                [
                     3600,
                     1800,
                     900,
@@ -130,7 +134,7 @@ namespace Oxide.Plugins
                     3,
                     2,
                     1
-                },
+                ],
                 EnableDailyRestart = false,
                 DailyRestartTime = "04:00:00",
                 DailyRestartCooldown = 300,
@@ -179,6 +183,7 @@ namespace Oxide.Plugins
         void OnServerInitialized()
         {
             _restart = ServerMgr.Instance.gameObject.AddComponent<UnityRestart>();
+            AddCovalenceCommand(Command.Prefix, nameof(SendWipeCommand));
         }
 
         private void Loaded()
@@ -287,13 +292,10 @@ namespace Oxide.Plugins
                 return Status.RESTARTING_NATIVE;
             }
 
-            if (_restart.IsRestarting)
-            {
-                restartTime = _restart.RestartTime;
-                return Status.RESTARTING;
-            }
+            if (!_restart.IsRestarting) return Status.NO_PLANNED;
 
-            return Status.NO_PLANNED;
+            restartTime = _restart.RestartTime;
+            return Status.RESTARTING;
         }
 
         public enum RestartStatus
@@ -336,9 +338,9 @@ namespace Oxide.Plugins
                     AvatarUrl = "https://i.imgur.com/O7s0Z1i.png",
                     Username = "RebootScheduler",
                     Content = (_config.DiscordRole != 0) ? $"<@&{_config.DiscordRole}>" : "",
-                    Embeds = new List<DiscordEmbed>()
-                    {
-                        new DiscordEmbed()
+                    Embeds =
+                    [
+                        new DiscordEmbed
                         {
                             Title = ConVar.Server.hostname,
                             Description = desc,
@@ -347,28 +349,29 @@ namespace Oxide.Plugins
                             {
                                 Url = "https://i.imgur.com/O7s0Z1i.png"
                             },
-                            Fields = new List<EmbedField>()
-                            {
-                                new EmbedField()
+                            Fields =
+                            [
+                                new EmbedField
                                 {
                                     Name = "Restart time",
                                     Value = _restart.RestartTime?.ToString("dd/MM/yyyy - HH:mm:ss UTC"),
                                     Inline = true
                                 },
-                                new EmbedField()
+
+                                new EmbedField
                                 {
                                     Name = "Reason",
                                     Value = _restart.Reason.ToString(),
                                     Inline = true
                                 }
-                            },
+                            ],
                             Footer = new EmbedFooter()
                             {
                                 Text = "RebootScheduler",
                                 IconUrl = "https://i.imgur.com/O7s0Z1i.png"
                             }
                         }
-    }
+                    ]
                 });
         }
 
@@ -538,12 +541,6 @@ namespace Oxide.Plugins
 
         #region Helper
 
-        private void SendMessage(string message, BasePlayer player = null)
-        {
-            if (player != null) Player.Message(player, message, _config.ChatAvatarId);
-            else Puts(message);
-        }
-
         private void SendGlobalMessage(string message)
         {
             Puts(message);
@@ -564,10 +561,8 @@ namespace Oxide.Plugins
             }
         }
 
-        private bool HasPermission(BasePlayer player, string permissionName)
-        {
-            return permission.UserHasPermission(player.UserIDString, permissionName);
-        }
+        private bool HasPermission(IPlayer player, string perm)
+            => permission.UserHasPermission(player.Id, perm);
 
         private static DateTime? ParseTime(string str)
         {
@@ -610,7 +605,7 @@ namespace Oxide.Plugins
 
         #region Discord
 
-        private readonly Dictionary<string, string> _headers = new Dictionary<string, string>()
+        private readonly Dictionary<string, string> _headers = new()
         {
             {"Content-Type", "application/json"}
         };
@@ -626,7 +621,7 @@ namespace Oxide.Plugins
 
             webrequest.Enqueue(url, payload, (code, response) =>
             {
-                if (code == 200 || code == 204) return;
+                if (code is 200 or 204) return;
                 if (response == null) PrintWarning($"Discord didn't respond. Error Code: {code}");
                 else Puts($"Discord respond with: {response} Payload: {payload}");
             }, this, RequestMethod.POST, _headers);
@@ -648,96 +643,80 @@ namespace Oxide.Plugins
             public const string Status = "status";
         }
 
-        [ChatCommand(Command.Prefix)]
-        private void ChatCommand(BasePlayer player, string command, string[] args)
-        {
-            if (!HasPermission(player, Permission.Admin))
-            {
-                SendMessage(GetMessage(MessageKey.NoPermission), player);
-                return;
-            }
-            MainCommand(player, args);
-        }
-
-        [ConsoleCommand(Command.Prefix)]
-        private void ConsoleCommand(ConsoleSystem.Arg conArgs)
-        {
-            if (conArgs.IsClientside && !HasPermission(conArgs.Player(), Permission.Admin))
-            {
-                Puts(GetMessage(MessageKey.NoPermission, conArgs.Player().UserIDString));
-                return;
-            }
-            MainCommand(null, conArgs.Args);
-        }
-
-        private void MainCommand([CanBeNull] BasePlayer player, string[] args)
+        private bool SendWipeCommand(IPlayer player, string cmd, string[] args)
         {
             if (args == null) throw new ArgumentNullException(nameof(args));
-            if (args.Length < 1)
+            if (!HasPermission(player, Permission.Admin))
             {
-                PrintWarning(GetMessage(MessageKey.UnknownCommand, player?.UserIDString));
-                return;
+                player.Message(GetMessage(MessageKey.NoPermission));
+                return true;
             }
-
+            if (args.Length == 0)
+            {
+                player.Message(GetMessage(MessageKey.Help));
+                return true;
+            }
             switch (args[0])
             {
                 case Command.Cancel:
                     if (IsRestartingNative)
                     {
                         CancelNativeRestart();
-                        SendMessage(GetMessage(MessageKey.NativeRestartCancel, player?.UserIDString), player);
+                        player.Message(GetMessage(MessageKey.NativeRestartCancel, player.Id));
                         break;
                     }
 
                     if (_restart.IsRestarting)
                     {
                         _restart.CancelRestart();
-                        SendMessage(GetMessage(MessageKey.RestartCancelMessage, player?.UserIDString), player);
+                        player.Message(GetMessage(MessageKey.RestartCancelMessage, player.Id));
                         break;
                     }
 
-                    SendMessage(GetMessage(MessageKey.NoRestartOnGoing, player?.UserIDString), player);
+                    player.Message(GetMessage(MessageKey.NoRestartOnGoing, player.Id));
                     break;
 
                 case Command.Discord:
                     SendRestartToDiscord(RestartStatus.Test);
-                    SendMessage("Test message sent to discord!", player);
+                    player.Message("Test message sent to discord!");
                     break;
 
                 case Command.Help:
-                    SendMessage(GetMessage(MessageKey.Help, player?.UserIDString), player);
+                    player.Message(GetMessage(MessageKey.Help, player.Id));
                     break;
 
                 case Command.Restart:
                     if (args.Length == 1)
                     {
                         _restart.DoRestart(DateTime.Now.AddSeconds(12), RestartReason.ServerAdmin);
-                        SendMessage(GetMessage(MessageKey.RestartInitialized, player?.UserIDString), player);
+                        player.Message(GetMessage(MessageKey.RestartInitialized, player.Id));
                         break;
                     }
 
                     if (args.Length == 2)
                     {
                         var time = ParseTime(args[1]);
-                        if (time == null) SendMessage(GetMessage(MessageKey.WrongTimeFormat, player?.UserIDString), player);
+                        if (time == null) player.Message(GetMessage(MessageKey.WrongTimeFormat, player.Id));
                         else _restart.DoRestart(time.Value.AddSeconds(2), RestartReason.ServerAdmin);
-                        SendMessage(GetMessage(MessageKey.RestartInitialized, player?.UserIDString), player);
+                        player.Message(GetMessage(MessageKey.RestartInitialized, player.Id));
                         break;
                     }
 
-                    SendMessage(GetMessage(MessageKey.WrongNumberOfArgument, player?.UserIDString), player);
+                    player.Message(GetMessage(MessageKey.WrongNumberOfArgument, player.Id));
                     break;
 
                 case Command.Status:
                     var status = GetStatus(out var restartTime);
-                    if (restartTime.HasValue) SendMessage(GetCustomMessage(MessageKey.StatusWithTime, player?.UserIDString, status, restartTime), player);
-                    else SendMessage(GetCustomMessage(MessageKey.Status, player?.UserIDString, status));
+                    player.Message(restartTime.HasValue
+                        ? GetCustomMessage(MessageKey.StatusWithTime, player.Id, status, restartTime)
+                        : GetCustomMessage(MessageKey.Status, player.Id, status));
                     break;
 
                 default:
-                    SendMessage(GetMessage(MessageKey.UnknownCommand, player?.UserIDString), player);
+                    player.Message(GetMessage(MessageKey.UnknownCommand, player.Id));
                     break;
             }
+            return true;
         }
 
         #endregion
@@ -834,7 +813,7 @@ namespace Oxide.Plugins
         #region External API
 
         [PluginReference]
-        Plugin UpdateNotice;
+        Plugin? UpdateNotice;
 
         #endregion External API
 
