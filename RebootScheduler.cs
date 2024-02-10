@@ -22,7 +22,7 @@ using Global = ConVar.Global;
 
 namespace Oxide.Plugins
 {
-    [Info("RebootScheduler", "HandyS11", "1.0.0")]
+    [Info("RebootScheduler", "HandyS11", "1.0.1")]
     [Description("Restart your Rust server on schedule or when updates comes out")]
     internal sealed class RebootScheduler : RustPlugin
     {
@@ -119,8 +119,8 @@ namespace Oxide.Plugins
                     EnableOnOxideUpdate = true,
                     EnableOnServerUpdate = true,
                 },
-                RestartMessageCooldown =
-                [
+                RestartMessageCooldown = new[]
+                {
                     3600,
                     1800,
                     900,
@@ -134,7 +134,7 @@ namespace Oxide.Plugins
                     3,
                     2,
                     1
-                ],
+                },
                 EnableDailyRestart = false,
                 DailyRestartTime = "04:00:00",
                 DailyRestartCooldown = 300,
@@ -338,8 +338,8 @@ namespace Oxide.Plugins
                     AvatarUrl = "https://i.imgur.com/O7s0Z1i.png",
                     Username = "RebootScheduler",
                     Content = (_config.DiscordRole != 0) ? $"<@&{_config.DiscordRole}>" : "",
-                    Embeds =
-                    [
+                    Embeds = new List<DiscordEmbed>
+                    {
                         new DiscordEmbed
                         {
                             Title = ConVar.Server.hostname,
@@ -349,8 +349,8 @@ namespace Oxide.Plugins
                             {
                                 Url = "https://i.imgur.com/O7s0Z1i.png"
                             },
-                            Fields =
-                            [
+                            Fields = new List<EmbedField>
+                                {
                                 new EmbedField
                                 {
                                     Name = "Restart time",
@@ -364,14 +364,14 @@ namespace Oxide.Plugins
                                     Value = _restart.Reason.ToString(),
                                     Inline = true
                                 }
-                            ],
+                            },
                             Footer = new EmbedFooter()
                             {
                                 Text = "RebootScheduler",
                                 IconUrl = "https://i.imgur.com/O7s0Z1i.png"
                             }
                         }
-                    ]
+                    }
                 });
         }
 
