@@ -21,9 +21,9 @@ Compatible with [Update Notice](https://umod.org/plugins/update-notice) for rest
 
 - `rs cancel` - Cancel the ongoing restart
 - `rs discord` - Send a test message to discord
-- `rs help` Display the help message
-- `rs restart <time in seconds>` Initiate a restart (10s if no time given)
-- `rs status` Display the current restart status
+- `rs help` - Display the help message
+- `rs restart <time in seconds>` - Initiate a restart (10s if no time given)
+- `rs status` - Display the current restart status
 
 # Configuration
 
